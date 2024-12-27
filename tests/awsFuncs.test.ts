@@ -1,39 +1,4 @@
 import { AwsFuncs } from '../src/awsFuncs';
-import { EnvisoAPI, ScanStatus, TicketType } from '../src/envisoAPI';
-import { TicketingAPI } from '../src/ticketingAPI';
-
-let params: { [x: string]: any; apiKey?: any; tenantKey?: any; salespointId?: any; publicKey?: any };
-
-export const createEnvisoAPI = async () => {
-  const awsCreds = new AwsFuncs('Development', process.env.CI);
-  params = await awsCreds.getParams([
-    { awsName: `/MACH-dev/EnvisoOptions/ApiKey`, isSecret: true },
-    { awsName: `/MACH-dev/EnvisoOptions/TenantKey`, isSecret: true },
-    { awsName: `/MACH-dev/EnvisoOptions/SalespointId`, isSecret: false },
-    { awsName: `/MACH-dev/EnvisoOptions/PublicKey`, isSecret: false },
-  ]);
-
-  return new EnvisoAPI({
-    api: 'https://api.staging-enviso.io',
-    apiKey: params.apiKey,
-    tenant: params.tenantKey,
-    salesID: params.salespointId,
-  });
-};
-
-const getParkingTicket = async (): Promise<string> => {
-  const ticketAPI = new TicketingAPI('https://cloud-dev.efteling.com/api');
-  const machToken = await ticketAPI.login('autotest-nl@efteling.com', 'obelixeetwortels');
-  const envisoApi = await createEnvisoAPI();
-  const timeStamp = new Date().toISOString();
-  const signature = envisoApi.createEnvisoSignature(params.apiKey + '_' + timeStamp, params.publicKey);
-  const envisoToken = await envisoApi.loginDirectSellingAPI(timeStamp, signature);
-
-  const order = await ticketAPI.getTestOrder(machToken, { price: 4.5 });
-  const parkingTicketIDs = await envisoApi.getOrderTickets(envisoToken, order.id, TicketType.parking, ScanStatus.all);
-  if (parkingTicketIDs.length === 0) throw new Error('No parking ticket found');
-  return parkingTicketIDs[0];
-};
 
 test('Should post event', async () => {
   const awsCreds = new AwsFuncs('Development', process.env.CI);
@@ -41,24 +6,16 @@ test('Should post event', async () => {
     Entries: [
       {
         Time: new Date(),
-        Source: 'Efteling.Mach.Connectors.Adyen.Webhooks, Version=0.1.3.74, Culture=neutral, PublicKeyToken=null',
+        Source: 'Example.Test, Version=0.1.3.74, Culture=neutral, PublicKeyToken=null',
         Resources: [],
-        DetailType: 'Payments.PaymentsConfirmed',
+        DetailType: 'Example.EventName',
         Detail: JSON.stringify({
-          payments: [
-            {
-              pspReference: 'GS65674PBD492P65',
-              originalPspReference: null,
-              amount: 745,
-              method: 'ideal',
-              merchantReference: '18eb3beb-d923-43f7-bec0-b148008e84e7',
-              merchantAccount: 'EftelingECOM',
-            },
-          ],
-          id: 'b231e48a-ca1f-4baa-883b-f4418711a3ef',
-          dateTime: new Date(),
+          eventPayload: {
+            key1: 'value1',
+            key2: 'value2',
+          },
         }),
-        EventBusName: 'arn:aws:events:eu-west-1:708551999344:event-bus/MACH-dev',
+        EventBusName: 'arn:aws:events:eu-west-1:event-bus/Test-dev',
       },
     ],
   });
@@ -68,23 +25,19 @@ test('Should post event', async () => {
 test('Should read params from AWS', async () => {
   const awsCreds = new AwsFuncs('Development', process.env.CI);
   const params = await awsCreds.getParams([
-    { awsName: `/MACH-dev/EnvisoOptions/ApiKey`, isSecret: true },
-    { awsName: `/MACH-dev/Connectors-Recreatex/Webhooks/HmacAuthentication/PrivateKey`, isSecret: true },
-    { awsName: '/MACH-dev/EnvisoOptions/PublicKey', isSecret: false },
-    { awsName: '/MACH-dev/EnvisoOptions/SalespointId', isSecret: false },
+    { awsName: `/Example-dev/Secret/ApiKey`, isSecret: true },
+    { awsName: '/Example-dev/NotASecret/Parameter', isSecret: false },
   ]);
 
   expect(params.apiKey).toMatch(/\S+/);
-  expect(params.privateKey).toMatch(/\S+/);
-  expect(params.publicKey).toMatch(/\S+/);
-  expect(params.salespointId).toMatch(/\S+/);
+  expect(params.parameter).toMatch(/\S+/);
 });
 
 test('Should read param from AWS with custom name', async () => {
   const awsCreds = new AwsFuncs('Development', process.env.CI);
   const params = await awsCreds.getParams([
     {
-      awsName: `/MACH-dev/EnvisoOptions/PublicKey`,
+      awsName: `/Example-dev/NotASecret/Parameter`,
       isSecret: false,
       propName: 'myCustomName',
     },
@@ -108,20 +61,19 @@ test('Should have AWS credentials', async () => {
   expect(credentials?.SessionToken).toMatch(/\S+/);
 });
 
-test('Should succesfully publish an event', async function () {
+test('Should successfully publish an event', async function () {
   const awsCreds = new AwsFuncs('Development', process.env.CI);
-  const parkingTicket = await getParkingTicket();
 
   const payload = {
-    uniqueTicketId: parkingTicket,
+    uniqueTicketId: 'fakeTicket123',
     transactionDateTime: new Date(),
   };
 
   const startTime = new Date();
-  await awsCreds.publishEventAsync('AccessControlTransactionEvent', payload, `MACH-dev`);
+  await awsCreds.publishEventAsync('TestEvent', payload, `TestBus`);
 
-  const filterPattern = `{ $.detail-type = "AccessControlTransactionProcessedEvent" && $.detail.transactionId = "${parkingTicket}" }`;
-  const result = await awsCreds.eventProducedAsync(startTime, filterPattern, `/MACH-dev/Framework-EventBus`);
+  const filterPattern = `{ $.detail-type = "TestEventProcessed" && $.detail.uniqueTicketId = "fakeTicket123" }`;
+  const result = await awsCreds.eventProducedAsync(startTime, filterPattern, `/TestBus`);
   expect(result).not.toBeNull();
   expect(result.detail.id).toMatch(
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/,

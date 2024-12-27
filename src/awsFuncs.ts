@@ -23,6 +23,7 @@ export class AwsFuncs {
   private readonly env: string;
   private readonly isCI: string;
 
+  // Initialize AWS credentials and environment settings
   constructor(node_env: string, isCI: string | undefined) {
     this.credentials = null;
     this.isCI = isCI ?? 'false';
@@ -34,6 +35,7 @@ export class AwsFuncs {
     this.env = ['staging', 'accept', 'acceptance'].includes(node_env.toLowerCase()) ? 'Staging' : 'Development';
   }
 
+  // Create a dynamic dictionary to store parameter values
   private createDynamicDictionary(): DynamicDictionary {
     return new Proxy({} as DynamicDictionary, {
       get: (target, prop: string) => {
@@ -45,6 +47,7 @@ export class AwsFuncs {
     });
   }
 
+  // Retrieve parameters from AWS SSM Parameter Store
   async getParams(params: Params[]) {
     const credentials = this.isCI === 'true' ? await this.getCredentialsAsync() : undefined;
     this.ssm = new AWS.SSM({
@@ -59,6 +62,7 @@ export class AwsFuncs {
     return { ...params1, ...params2 };
   }
 
+  // Helper method to get parameters from SSM Parameter Store with or without decryption
   private async getFromParameterStore(params: Params[], withDecryption: boolean) {
     const myParams = this.createDynamicDictionary();
 
@@ -86,6 +90,7 @@ export class AwsFuncs {
     return myParams;
   }
 
+  // Retrieve temporary AWS credentials using STS assume role
   async getCredentialsAsync() {
     if (
       this.isCI === 'false' ||
@@ -100,7 +105,7 @@ export class AwsFuncs {
       const callerIdentity = await securityTokenService.getCallerIdentity({}).promise();
 
       const assumeRoleRequest: AssumeRoleRequest = {
-        RoleArn: `arn:aws:iam::${callerIdentity.Account}:role/MACH-${this.env}-Tests-ExecutionRole`,
+        RoleArn: `arn:aws:iam::${callerIdentity.Account}:role/Example-${this.env}-Test-ExecutionRole`,
         RoleSessionName: `tests-execution-${new Date().toISOString().replace(/[:-]/g, '').substring(0, 15)}`,
         DurationSeconds: 900,
       };
@@ -119,10 +124,11 @@ export class AwsFuncs {
     }
   }
 
+  // Publish an event to AWS EventBridge
   async publishEventAsync<T>(
     eventName: string,
     payload: T,
-    eventBusName: string = `aws/events/MACH-${this.env === 'Staging' ? 'stg' : 'dev'}`,
+    eventBusName: string = `aws/events/Example-${this.env === 'Staging' ? 'stg' : 'dev'}`,
   ): Promise<void> {
     const eventBridgeClient = new AWS.EventBridge({ region: 'eu-west-1' });
 
@@ -132,7 +138,7 @@ export class AwsFuncs {
       Entries: [
         {
           EventBusName: eventBusName,
-          Source: `Efteling.Mach.Integration.Tests`,
+          Source: `Example.Integration.Tests`,
           DetailType: eventName,
           Detail: JSON.stringify(payload),
         } as PutEventsRequestEntry,
@@ -146,6 +152,7 @@ export class AwsFuncs {
     }
   }
 
+  // Poll CloudWatch Logs to check if an event matching the filter pattern has been produced
   async eventProducedAsync(startTime: Date, filterPattern: string, logGroupName: string, maxDuration: number = 90000) {
     const creds = await this.getCredentialsAsync();
 
@@ -198,6 +205,7 @@ export class AwsFuncs {
     }
   }
 
+  // Post an event to EventBridge using the AWS SDK v3
   async postEventBus(message: PutEventsCommandInput) {
     const client = new EventBridgeClient(AWS.SSM);
     const command = new PutEventsCommand(message);
