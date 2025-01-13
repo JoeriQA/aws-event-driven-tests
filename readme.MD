@@ -4,6 +4,10 @@
 
 This project provides a framework for setting up event-driven tests in AWS. It includes utilities for interacting with AWS services such as SSM Parameter Store, STS, EventBridge, and CloudWatch Logs.
 
+## Requirements
+
+- Requires local AWS credentials to make sure your tests can reach AWS ([Leapp}(https://www.leapp.cloud/) is a nice tool for this) 
+
 ## Features
 
 - Retrieve parameters from AWS SSM Parameter Store.
