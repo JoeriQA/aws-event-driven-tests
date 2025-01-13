@@ -6,7 +6,7 @@ This project provides a framework for setting up event-driven tests in AWS. It i
 
 ## Requirements
 
-- Requires local AWS credentials to make sure your tests can reach AWS ([Leapp}(https://www.leapp.cloud/) is a nice tool for this) 
+- Requires local AWS credentials to make sure your tests can reach AWS ([Leapp](https://www.leapp.cloud/) is a nice tool for this) 
 
 ## Features
 
